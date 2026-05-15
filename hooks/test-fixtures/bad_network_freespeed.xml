@@ -1,0 +1,6 @@
+<network>
+  <links>
+    <link id="1" from="A" to="B" length="500" freespeed="60" capacity="1800" lanes="2"/>
+    <link id="2" from="B" to="C" length="300" freespeed="50" capacity="1500" lanes="1"/>
+  </links>
+</network>

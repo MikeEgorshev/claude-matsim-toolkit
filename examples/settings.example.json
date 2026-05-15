@@ -1,0 +1,17 @@
+{
+  "_comment": "Пример блока hooks для ~/.claude/settings.json. Скопируй секцию 'hooks' в свой settings.json. Путь к скрипту замени на абсолютный путь у тебя на машине.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/<YOUR-USER>/.claude/hooks/validate_matsim.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

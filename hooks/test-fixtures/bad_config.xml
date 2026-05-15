@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <module name="qsim">
+    <param name="flowCapacityFactor" value="1.0" />
+    <param name="storageCapacityFactor" value="0.1" />
+    <param name="numberOfThreads" value="4" />
+  </module>
+</config>

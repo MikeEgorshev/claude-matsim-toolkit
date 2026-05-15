@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+
+# Local excerpts — не коммитим выжимки из источников (копирайт)
+skills/transport-modeling/references/excerpts/*
+!skills/transport-modeling/references/excerpts/README.md
+
+# Local workspace for skill evals (не коммитим, локальные тесты)
+*-workspace/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp

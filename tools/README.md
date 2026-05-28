@@ -25,9 +25,21 @@ python matsim_metrics.py output/ --pretty
 (начальный и финальный), среднюю дальность поездки. Это контур обратной связи —
 агент по нему оценивает стала ли модель лучше.
 
+### `matsim_run.py` — запуск симуляции
+```bash
+python matsim_run.py --jar app.jar --main-class org.matsim.project.RunShamalgan \
+    --config scenarios/shamalgan/config.xml --iterations 100 \
+    --output runs/exp_100it --threads 7 --cwd <корень проекта> --summarize
+```
+Огромный stdout MATSim уходит в лог-файл, агенту возвращается компактный JSON
+(статус, exit code, длительность, путь к логу, опц. метрики через `--summarize`).
+Длинные прогоны — в фон (в Claude Code: Bash с `run_in_background`). Есть `--dry-run`
+чтобы проверить собранную команду без запуска. Переопределения итераций/папки идут
+через штатные MATSim-оверрайды `--config:controler.lastIteration=N` и
+`--config:controler.outputDirectory=DIR` — ничего в самом config.xml не меняется.
+
 ## Планируется
 
-- `matsim_run.py` — запуск симуляции через subprocess (дружит с фоновым режимом)
 - `matsim_modify.py` — типизированное изменение модели (закрыть link, сменить capacity)
   с валидацией параметров ДО записи
 

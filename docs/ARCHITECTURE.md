@@ -82,8 +82,8 @@ MCP-обёртка добавляется на слое 3 **после** тог�
 
 - [x] Слой 1 (знания): skill
 - [x] Слой 2 (безопасность): hook
-- [ ] Слой 3a (read-only): `tools/matsim_summary.py`, `tools/matsim_metrics.py`
-- [ ] Слой 3b (run): `tools/matsim_run.py` — subprocess, background-friendly
+- [x] Слой 3a (read-only): `tools/matsim_summary.py`, `tools/matsim_metrics.py`
+- [x] Слой 3b (run): `tools/matsim_run.py` — subprocess, background-friendly
 - [ ] Слой 3c (modify): `tools/matsim_modify.py` — типизированное изменение + валидация
 - [ ] Слой 4 (MCP): `mcp-servers/matsim-tools/` — обёртка над tools/
 - [ ] Демо-сценарий: «закрытие моста» end-to-end

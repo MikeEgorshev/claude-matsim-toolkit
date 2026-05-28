@@ -38,10 +38,23 @@ python matsim_run.py --jar app.jar --main-class org.matsim.project.RunShamalgan 
 через штатные MATSim-оверрайды `--config:controler.lastIteration=N` и
 `--config:controler.outputDirectory=DIR` — ничего в самом config.xml не меняется.
 
-## Планируется
+## Изменяющие (с валидацией и защитой оригинала)
 
-- `matsim_modify.py` — типизированное изменение модели (закрыть link, сменить capacity)
-  с валидацией параметров ДО записи
+### `matsim_modify.py` — типизированное изменение network.xml
+```bash
+# Закрыть мост для авто (записать в копию)
+python matsim_modify.py --network net.xml --output net_closed.xml --links 456 --close-link
+
+# Поднять capacity и задать скорость из км/ч; посмотреть что изменится без записи
+python matsim_modify.py --network net.xml --output net2.xml \
+    --links 12,13,14 --set-capacity 1200 --set-freespeed-kmh 60 --dry-run --pretty
+```
+Операции (комбинируются): `--set-capacity`, `--set-freespeed` (м/с),
+`--set-freespeed-kmh` (÷3.6 автоматически), `--set-lanes` (→ permlanes),
+`--remove-modes`, `--close-link` (= убрать car). Валидация ДО записи: capacity/freespeed > 0,
+link существует, freespeed-варнинг при > 50 м/с. Пишет в КОПИЮ (оригинал защищён,
+перезапись только с `--force`). DOCTYPE сети сохраняется. Возвращает JSON со списком
+изменений (старое → новое) и предупреждениями.
 
 ## Принцип безопасности
 

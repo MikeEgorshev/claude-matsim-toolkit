@@ -57,6 +57,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
         cmd.append(f"--config:controler.lastIteration={args.iterations}")
     if args.output:
         cmd.append(f"--config:controler.outputDirectory={args.output}")
+    if args.network:
+        cmd.append(f"--config:network.inputNetworkFile={args.network}")
 
     # Потоки — у RunShamalgan свой флаг --threads, но и --config:*.numberOfThreads сработает
     if args.threads is not None:
@@ -105,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", help="Путь к config.xml (если опущен — дефолт проекта)")
     parser.add_argument("--iterations", type=int, help="Переопределить controler.lastIteration")
     parser.add_argument("--output", help="Переопределить controler.outputDirectory")
+    parser.add_argument("--network", help="Переопределить network.inputNetworkFile (путь относительно config)")
     parser.add_argument("--threads", type=int, help="Число потоков")
     parser.add_argument("--java", default="java", help="Исполняемый java (по умолчанию 'java')")
     parser.add_argument("--cwd", help="Рабочая папка запуска (обычно корень MATSim-проекта)")

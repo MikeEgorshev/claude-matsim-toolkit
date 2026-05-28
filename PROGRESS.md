@@ -18,13 +18,24 @@
 | 3b. Действия — run | `matsim_run.py` (запуск + цикл обратной связи) | ✅ готово | `tools/` |
 | 3c. Действия — modify | `matsim_modify.py` (типизир. изменение модели) | ✅ готово | `tools/` (ветка `feature/modify-layer`) |
 | Демо | сценарий «закрытие моста» end-to-end | ✅ готово | проверено на link 2114 |
-| 4. MCP-обёртка | `mcp-servers/matsim-tools/` | ⏳ план | — |
+| 4. MCP-обёртка | `mcp-servers/matsim-tools/` (4 инструмента) | ✅ готово | ветка `feature/mcp-server` |
 
 Легенда: ✅ готово и проверено · 🔨 в работе · ⏳ запланировано
 
 ---
 
 ## Журнал реализованных фич
+
+### 2026-05-28 — MCP-обёртка (ветка `feature/mcp-server`)
+- `mcp-servers/matsim-tools/server.py`: FastMCP-сервер с 4 инструментами
+  (`get_network_summary`, `get_simulation_metrics`, `modify_network`, `run_simulation`).
+- Тонкая обёртка: read-only и modify зовут импортированные функции из `tools/`
+  напрямую, run — через subprocess. Доменная логика не дублируется.
+- `requirements.txt` (зависимость `mcp` только тут; сами `tools/` — stdlib),
+  `README.md` с инструкцией регистрации в Claude Code, `test_server.py`.
+- **Проверено** `test_server.py` на реальных данных: 6/6 — регистрация 4 инструментов,
+  summary/metrics на реальных файлах, modify dry-run + отлов ошибки валидации,
+  run dry-run сборки команды.
 
 ### 2026-05-28 — Демо «закрытие моста» end-to-end + флаг `--network`
 - Прогнан полный цикл на реальном Shamalgan: modify (закрыть link 2114) → run baseline
@@ -95,6 +106,7 @@
 | run | реальный прогон 1 итерации + повторный | ✅ exit 0, метрики |
 | modify | валидация + защита оригинала + реальная запись + round-trip | ✅ 5/5 сценариев |
 | демо end-to-end | закрытие link 2114, baseline vs closed (10 ит. каждый) | ✅ цикл замкнут |
+| MCP-сервер | `test_server.py` (регистрация + 4 инструмента на реальных данных) | ✅ 6/6 |
 
 ---
 
@@ -115,7 +127,8 @@
 
 ## Что дальше (приоритет)
 
-1. **Merge `feature/modify-layer` → `main`** — modify-слой и демо готовы и проверены.
-2. **MCP-обёртка** над `tools/` — переносимые typed-инструменты для много-сессионной работы.
+1. **Зарегистрировать MCP в Claude Code и протестировать вживую** — вызвать инструменты
+   `matsim-tools:*` из реальной сессии (не только через test_server.py).
+2. **Merge `feature/mcp-server` → `main`** после живой проверки.
 3. **Расширения modify** (по мере надобности): NetworkChangeEvents (временные закрытия),
    правка plans (спрос), выбор «критического» звена по v/c ratio для осмысленных сценариев.

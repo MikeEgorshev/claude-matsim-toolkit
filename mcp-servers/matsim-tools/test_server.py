@@ -42,8 +42,9 @@ async def main() -> int:
     # 1. Регистрация инструментов в FastMCP
     tools = await server.mcp.list_tools()
     names = {t.name for t in tools}
-    expected = {"get_network_summary", "get_simulation_metrics", "modify_network", "run_simulation"}
-    results.append(check(f"4 инструмента зарегистрированы ({sorted(names)})", expected <= names,
+    expected = {"get_network_summary", "get_simulation_metrics", "modify_network",
+                "run_simulation", "start_simulation", "get_run_status"}
+    results.append(check(f"6 инструментов зарегистрированы ({sorted(names)})", expected <= names,
                          f"ожидались {expected}, есть {names}"))
 
     # 2. get_network_summary на реальной сети
@@ -91,6 +92,29 @@ async def main() -> int:
         )
         ok = r.get("status") == "dry_run" and any("RunShamalgan" in c for c in r.get("command", []))
         results.append(check("run_simulation: dry-run собирает команду", ok, str(r)[:200]))
+
+        # 7. start_simulation + get_run_status (async, реальный короткий прогон)
+        import time as _t
+        s = server.start_simulation(
+            jar=str(jars[-1]), main_class="org.matsim.project.RunShamalgan",
+            config="scenarios/shamalgan/config.xml", iterations=1,
+            output="runs/async_test", threads=4, cwd=str(proj),
+        )
+        t0 = _t.time()
+        non_blocking = (_t.time() - t0) < 2 and s.get("status") == "running" and "run_id" in s
+        results.append(check("start_simulation: не блокирует, вернул run_id", non_blocking, str(s)[:200]))
+
+        if "run_id" in s:
+            rid = s["run_id"]
+            st = None
+            for _ in range(48):  # до ~4 мин
+                _t.sleep(5)
+                st = server.get_run_status(rid)
+                if st.get("status") != "running":
+                    break
+            done = st is not None and st.get("status") == "completed" \
+                and st.get("result", {}).get("metrics", {}).get("iterations") is not None
+            results.append(check("get_run_status: дождались completed с метриками", done, str(st)[:200]))
     else:
         print(f"[skip] jar не найден в {proj}")
 

@@ -20,12 +20,18 @@ import json
 import os
 import subprocess
 import sys
+import time
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
 # tools/ лежит на два уровня выше: <repo>/tools/
 TOOLS_DIR = Path(__file__).resolve().parents[2] / "tools"
 sys.path.insert(0, str(TOOLS_DIR))
+
+# Реестр фоновых прогонов (для launch-and-poll). В домашней папке, чтобы
+# get_run_status находил прогон по run_id независимо от cwd.
+RUNS_REGISTRY = Path.home() / ".matsim_runs"
 
 from matsim_metrics import collect_metrics  # noqa: E402
 from matsim_modify import apply_modifications  # noqa: E402
@@ -112,29 +118,12 @@ def modify_network(
     return apply_modifications(args)
 
 
-@mcp.tool()
-def run_simulation(
-    jar: str,
-    config: str = "",
-    main_class: str = "",
-    iterations: int | None = None,
-    output: str = "",
-    network: str = "",
-    threads: int | None = None,
-    cwd: str = "",
-    timeout: int | None = None,
-    summarize: bool = True,
-    dry_run: bool = False,
-) -> dict:
-    """Запустить симуляцию MATSim и вернуть компактный JSON (статус, метрики).
-
-    Огромный stdout MATSim уходит в лог-файл, агенту возвращается короткий результат.
-    ВНИМАНИЕ: длинные прогоны блокируют — для них ставь разумный timeout или гоняй
-    малое число итераций. iterations/output/network применяются как штатные
-    --config: оверрайды (сам config.xml не меняется). dry_run=True — только показать
-    команду. Возвращает status, exit_code, duration_s, log_file и (при summarize)
-    распарсенные метрики.
-    """
+def _matsim_run_cmd(
+    jar: str, config: str, main_class: str, iterations: int | None, output: str,
+    network: str, threads: int | None, cwd: str, timeout: int | None,
+    summarize: bool, dry_run: bool,
+) -> list[str]:
+    """Собрать argv для CLI tools/matsim_run.py (общий для sync и async путей)."""
     cmd = [sys.executable, str(TOOLS_DIR / "matsim_run.py"), "--jar", jar]
     if main_class:
         cmd += ["--main-class", main_class]
@@ -156,7 +145,33 @@ def run_simulation(
         cmd += ["--summarize"]
     if dry_run:
         cmd += ["--dry-run"]
+    return cmd
 
+
+@mcp.tool()
+def run_simulation(
+    jar: str,
+    config: str = "",
+    main_class: str = "",
+    iterations: int | None = None,
+    output: str = "",
+    network: str = "",
+    threads: int | None = None,
+    cwd: str = "",
+    timeout: int | None = None,
+    summarize: bool = True,
+    dry_run: bool = False,
+) -> dict:
+    """Запустить симуляцию СИНХРОННО (блокирует) — только для dry_run и коротких
+    smoke-прогонов (≤ нескольких итераций).
+
+    ВНИМАНИЕ: блокирует вызов на всё время прогона. Для реальных/длинных прогонов
+    используй start_simulation + get_run_status (не блокирует, обходит таймаут MCP).
+    iterations/output/network — штатные --config: оверрайды (config.xml не меняется).
+    Возвращает status, exit_code, duration_s, log_file и (при summarize) метрики.
+    """
+    cmd = _matsim_run_cmd(jar, config, main_class, iterations, output, network,
+                          threads, cwd, timeout, summarize, dry_run)
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     try:
@@ -169,6 +184,106 @@ def run_simulation(
                 "stdout_tail": (proc.stdout or "")[-1500:], "stderr_tail": (proc.stderr or "")[-1500:]}
     except Exception as e:  # noqa: BLE001
         return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def start_simulation(
+    jar: str,
+    config: str = "",
+    main_class: str = "",
+    iterations: int | None = None,
+    output: str = "",
+    network: str = "",
+    threads: int | None = None,
+    cwd: str = "",
+    summarize: bool = True,
+) -> dict:
+    """Запустить симуляцию В ФОНЕ и сразу вернуть run_id (НЕ блокирует).
+
+    Правильный путь для реальных/длинных прогонов: вызов возвращается мгновенно,
+    симуляция крутится в фоне, финальный JSON пишется в файл. Потом проверяй
+    get_run_status(run_id) — он отдаст 'running' или финальные метрики.
+    iterations/output/network — штатные --config: оверрайды (config.xml не меняется).
+    """
+    RUNS_REGISTRY.mkdir(parents=True, exist_ok=True)
+    run_id = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
+    result_file = RUNS_REGISTRY / f"{run_id}.result.json"
+    err_file = RUNS_REGISTRY / f"{run_id}.err"
+    meta_file = RUNS_REGISTRY / f"{run_id}.meta.json"
+
+    # summarize=True чтобы фоновый прогон сразу сложил метрики в результат
+    cmd = _matsim_run_cmd(jar, config, main_class, iterations, output, network,
+                          threads, cwd, None, summarize, False)
+
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    out_fh = open(result_file, "w", encoding="utf-8")
+    err_fh = open(err_file, "w", encoding="utf-8")
+    try:
+        creationflags = subprocess.DETACHED_PROCESS if os.name == "nt" else 0
+        proc = subprocess.Popen(
+            cmd, cwd=cwd or None, stdout=out_fh, stderr=err_fh, env=env,
+            creationflags=creationflags,
+        )
+    finally:
+        out_fh.close()
+        err_fh.close()
+
+    meta = {
+        "run_id": run_id, "pid": proc.pid, "command": cmd, "cwd": cwd,
+        "result_file": str(result_file), "err_file": str(err_file),
+        "started_at": time.time(), "started_at_h": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    meta_file.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+    return {
+        "run_id": run_id,
+        "status": "running",
+        "started_at": meta["started_at_h"],
+        "message": "Симуляция запущена в фоне. Проверяй статус через get_run_status(run_id).",
+    }
+
+
+@mcp.tool()
+def get_run_status(run_id: str) -> dict:
+    """Статус фонового прогона по run_id (из start_simulation).
+
+    Возвращает status='running' (с elapsed_s) пока идёт, либо финальный результат
+    (status + метрики) когда завершился. Определяет завершение по наличию валидного
+    JSON в файле результата — кросс-платформенно, без проверки pid.
+    """
+    meta_file = RUNS_REGISTRY / f"{run_id}.meta.json"
+    if not meta_file.exists():
+        return {"run_id": run_id, "status": "unknown", "error": "нет такого run_id в реестре"}
+
+    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+    elapsed = round(time.time() - meta["started_at"], 1)
+    result_file = Path(meta["result_file"])
+    content = result_file.read_text(encoding="utf-8").strip() if result_file.exists() else ""
+
+    if content:
+        try:
+            result = json.loads(content)
+            return {"run_id": run_id, "status": result.get("status", "completed"),
+                    "elapsed_s": elapsed, "result": result}
+        except json.JSONDecodeError:
+            err = ""
+            err_file = Path(meta["err_file"])
+            if err_file.exists():
+                err = err_file.read_text(encoding="utf-8", errors="replace")[-1000:]
+            return {"run_id": run_id, "status": "error", "elapsed_s": elapsed,
+                    "error": "вывод не JSON (возможно сбой)", "stdout_tail": content[-1000:],
+                    "stderr_tail": err}
+
+    # результат пуст — либо ещё идёт, либо лаунчер упал до вывода (есть traceback)
+    err_file = Path(meta["err_file"])
+    if err_file.exists():
+        err = err_file.read_text(encoding="utf-8", errors="replace")
+        if "Traceback" in err:
+            return {"run_id": run_id, "status": "error", "elapsed_s": elapsed,
+                    "error": "лаунчер завершился с ошибкой до вывода результата",
+                    "stderr_tail": err[-1000:]}
+    return {"run_id": run_id, "status": "running", "elapsed_s": elapsed}
 
 
 if __name__ == "__main__":

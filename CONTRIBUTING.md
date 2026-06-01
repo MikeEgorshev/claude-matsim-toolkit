@@ -132,6 +132,8 @@ VALIDATORS["transitSchedule"] = validate_transit_schedule
 
 ---
 
+> **Глубокий разбор слоёв 3 и 4** (что уже есть, sync vs async, гетчи из реальной разработки, расширенные шаблоны) — в [docs/LAYERS_3_4_GUIDE.md](docs/LAYERS_3_4_GUIDE.md). Раздел ниже — короткая выжимка.
+
 ## Слой 3 — добавить CLI-инструмент в `tools/`
 
 **Файл:** новый `tools/matsim_<name>.py`.
